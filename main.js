@@ -1,1 +1,1 @@
-prompt("WoooooooP");
+console.log("WoooooooP");
