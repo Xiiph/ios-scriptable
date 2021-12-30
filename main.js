@@ -1,5 +1,23 @@
 'use strict';
 
+const normalize = (x
+= "") => (x.normalize().toUpperCase());
+
+const cmpStr = (a, b) => {
+  return { 
+    is: a == b,
+    has: a.includes(b) && b != "", 
+    begin: a.startsWith(b) && b != "",
+  }
+}
+
+const cmpArr = (a, b) => {
+  return { 
+    is: a == b,
+    has: a.includes(b),
+  }
+}
+
 class Artist {
   constructor(data) {
     this.parse(data);
@@ -38,9 +56,7 @@ class Track {
     this.artist = new Artist(data);
     this.collection = new Collection(data);
     
-    const featPattern = /[(\[](?:featuring|feat[.]?|ft[.]?)\s+([^\])]+)/i;
-
-    const fullPattern = /(.+)\s?(?:\[|\()?/i;
+    const featPattern = /[(\[](?:featuring\b|feat\b[.]?|ft\b[.]?)\s+([^\])]+)/i;
 
     const versionPattern = /[\[(](?!featuring\b|feat\b|ft\b)([^\])]+)/i;
     
@@ -49,15 +65,46 @@ class Track {
 //     this.title = m[1];
     let m;
     m = this.name.match(featPattern);
-    this.featuring = m ? m[1] : "";
+    this.featuringStr = m ? m[1] : "";
+    
+    if (m) {
+      const featArtistPattern = /[^,&]+/gi;
+      m = this.featuringStr.match(featArtistPattern);
+      this.featuring = m.map(normalize);
+    } else {
+      this.featuring = [];
+    }
     
     m = this.name.match(versionPattern);
     this.version = m ? m[1] : "";
     
     let matchIndex = this.name.search(/\[|\(/);
-    this.title = this.name.slice(0, matchIndex).trim();
+    this.title = (matchIndex != -1) ? this.name.slice(0, matchIndex).trim() : this.name;
+      
+    console.log([this.title, this.featuring, this.version]);
+
+    this.normalized = { 
+      name: normalize(this.name),
+      title: normalize(this.title),
+      artist: normalize(this.artist.name),
+      collection: normalize(this.collection.name),
+      version: normalize(this.version),
+      featuring: this.featuring.map(x => normalize(x)),
+    };
+  }
+  
+  compare(needle) {
+    const a = this.normalized;
+    const b = needle.normalized;
     
-console.log([this.title, this.featuring, this.version]);
+    let result = {
+      name: cmpStr(a.name, b.title),
+      title: cmpStr(a.title, b.title),
+      artist: cmpStr(a.artist, b.artist),
+      featuring: cmpArr(a.featuring, b.featuring),
+    };
+    
+    return result;
   }
 }
 
@@ -86,6 +133,13 @@ const featPattern = /(.+?)(?:\s+(?:featuring|feat[.]?|ft[.]?)\s+|$)/gi;
     
     this.artist = this.all[0];
     this.featuring = this.all.slice(1);
+    
+    this.normalized = {
+      artist: normalize(this.artist),
+      title: normalize(this.title),
+      full: normalize(this.full),
+      featuring: this.featuring.map(normalize),
+    };
   }
 }
 
@@ -107,8 +161,8 @@ async function searchAll(term) {
     let result = await search(term);
     let tracks = parseSearchResult(result);
     
-    console.log(tracks);
-    return result;
+    console.log(result);
+    return tracks;
 }
 
 function parseSearchResult(result) {
@@ -134,13 +188,15 @@ function getNeedle(str) {
 //     console.log(m.groups.fullArtist);
 }
 
-// console.log(await searchAll("domino"));
-console.log(await searchAll("feat radio edit"));
+// console.log(await searchAll("domino"));// 
+// let tracks = await searchAll("feat radio edit");
 // console.log(getNeedle("Domino by Jessie J feat Pitbull"));
 
-let input = "Domino by Jessie J feat Pitbull";
+let input = "Domino by Jessie J";
+let tracks = await searchAll(input);
+let needle = new Needle(input);
 
-console.log(new Needle(input));
+console.log(tracks && tracks[0].compare(needle));
 // let url = 'https://itunes.apple.com/search?country=se&media=music&entity=song&term=Domino+Jessie+J&limit=25&explicit=yes';
 // const r = new Request(url);
 // await console.log(r);
